@@ -571,6 +571,18 @@ export const config = Object.freeze({
       min: 1,
       max: 20,
     }),
+    maxImageAttachments: configuredInteger(
+      "chatRelay.maxImageAttachments",
+      "CHAT_RELAY_MAX_IMAGE_ATTACHMENTS",
+      4,
+      { min: 0, max: 10 },
+    ),
+    maxAttachmentBytes: configuredInteger(
+      "chatRelay.maxAttachmentBytes",
+      "CHAT_RELAY_MAX_ATTACHMENT_BYTES",
+      8_000_000,
+      { min: 1_024, max: 20_000_000 },
+    ),
   }),
   // Memory is OFF by default. It stores content from a shared room, so an operator
   // has to switch it on deliberately and take on the obligations in README §Memory.
