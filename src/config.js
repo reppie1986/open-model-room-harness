@@ -577,6 +577,12 @@ export const config = Object.freeze({
       4,
       { min: 0, max: 10 },
     ),
+    maxTextAttachments: configuredInteger(
+      "chatRelay.maxTextAttachments",
+      "CHAT_RELAY_MAX_TEXT_ATTACHMENTS",
+      4,
+      { min: 0, max: 10 },
+    ),
     maxAttachmentBytes: configuredInteger(
       "chatRelay.maxAttachmentBytes",
       "CHAT_RELAY_MAX_ATTACHMENT_BYTES",

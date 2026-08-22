@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { ChatRelayQueue } from "../src/chat-relay.js";
-import { fetchRelayImageAttachment } from "../src/chat-relay-attachments.js";
+import { fetchRelayImageAttachment, fetchRelayTextAttachment } from "../src/chat-relay-attachments.js";
 
 function message(overrides = {}) {
   return {
@@ -108,6 +108,43 @@ test("queues bounded image metadata without exposing its Discord URL", () => {
   assert.equal(queue.getImageAttachment(id, 2), null);
 });
 
+test("queues bounded text attachment metadata without exposing its Discord URL", () => {
+  const queue = new ChatRelayQueue({ enabled: true, maxTextAttachments: 1 });
+  const id = queue.enqueue({
+    message: message({
+      attachments: new Map([
+        ["a1", {
+          url: "https://cdn.discordapp.com/attachments/channel/message/recipe_for_a_pattern.md",
+          name: "recipe_for_a_pattern.md",
+          contentType: "text/markdown",
+          size: 4096,
+        }],
+        ["a2", {
+          url: "https://cdn.discordapp.com/attachments/channel/message/ignored.txt",
+          name: "ignored.txt",
+          contentType: "text/plain",
+          size: 10,
+        }],
+      ]),
+    }),
+    context: [],
+  });
+
+  const item = queue.get(id);
+  assert.deepEqual(item.textAttachments, [{
+    index: 0,
+    source: "attachment",
+    filename: "recipe_for_a_pattern.md",
+    contentType: "text/markdown",
+    size: 4096,
+  }]);
+  assert.equal(JSON.stringify(item).includes("discordapp"), false);
+  assert.equal(queue.getTextAttachment(id, 0).url, "https://cdn.discordapp.com/attachments/channel/message/recipe_for_a_pattern.md");
+  assert.equal(queue.getTextAttachment(id, 1), null);
+  assert.match(item.workerContract.instruction, /textAttachments/);
+  assert.match(item.workerContract.instruction, /metadata alone is not the file content/);
+});
+
 test("binds a worker to one relay item and preserves bounded Discord reply context", () => {
   const queue = new ChatRelayQueue({ enabled: true });
   const id = queue.enqueue({
@@ -179,6 +216,45 @@ test("fetches only bounded images from approved Discord hosts", async () => {
       }),
     }),
     /not a supported image/,
+  );
+});
+
+test("fetches only bounded UTF-8 text attachments from approved Discord hosts", async () => {
+  const fetched = [];
+  const attachment = await fetchRelayTextAttachment({
+    url: "https://cdn.discordapp.com/attachments/channel/message/recipe_for_a_pattern.md",
+    filename: "recipe_for_a_pattern.md",
+    contentType: "text/markdown",
+    size: 12,
+  }, {
+    maxBytes: 20,
+    fetchImplementation: async (url, options) => {
+      fetched.push([url, options.redirect]);
+      return new Response(Buffer.from("# Soul Core\n"), {
+        headers: { "content-type": "text/markdown", "content-length": "12" },
+      });
+    },
+  });
+  assert.equal(attachment.text, "# Soul Core\n");
+  assert.equal(attachment.mimeType, "text/markdown");
+  assert.deepEqual(fetched, [["https://cdn.discordapp.com/attachments/channel/message/recipe_for_a_pattern.md", "error"]]);
+
+  await assert.rejects(
+    fetchRelayTextAttachment({
+      url: "https://example.com/private.md",
+      filename: "private.md",
+      contentType: "text/markdown",
+    }),
+    /approved HTTPS Discord CDN or proxy URL/,
+  );
+  await assert.rejects(
+    fetchRelayTextAttachment({
+      url: "https://cdn.discordapp.com/attachments/channel/message/huge.md",
+      filename: "huge.md",
+      contentType: "text/markdown",
+      size: 1025,
+    }, { maxBytes: 10 }),
+    /exceeds the 1024-byte relay limit/,
   );
 });
 

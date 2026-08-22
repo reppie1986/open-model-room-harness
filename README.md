@@ -372,6 +372,7 @@ set_audio_mode
 get_pending_chat_relay
 get_chat_relay_item
 get_chat_relay_attachment
+get_chat_relay_text_attachment
 submit_chat_relay_reply
 dismiss_chat_relay_item
 ```
@@ -413,6 +414,7 @@ CHAT_RELAY_MAX_ITEMS=50
 CHAT_RELAY_LEASE_SECONDS=120
 CHAT_RELAY_MAX_ATTEMPTS=3
 CHAT_RELAY_MAX_IMAGE_ATTACHMENTS=4
+CHAT_RELAY_MAX_TEXT_ATTACHMENTS=4
 CHAT_RELAY_MAX_ATTACHMENT_BYTES=8000000
 ```
 
@@ -430,6 +432,11 @@ client. The tool accepts no URL argument: it can fetch only references captured 
 the Discord message, permits approved Discord CDN/proxy hosts over HTTPS, rejects
 redirects, and enforces the configured byte limit. This lets an external multimodal
 chat provider inspect Discord images without configuring the harness vision sidecar.
+Safe UTF-8 text-like Discord file attachments are exposed separately as
+`textAttachments`; use `get_chat_relay_text_attachment` with the advertised index
+to fetch bounded Markdown, plaintext, JSON, code, patch, log, CSV, XML, YAML, and
+similar files captured from the same relay item. Metadata is visible in the claim
+payload, but the Discord CDN URL is never exposed.
 
 For environments where scheduled tasks are too infrequent, the optional build-free
 browser prototype in [`extensions/chat-relay-wake`](extensions/chat-relay-wake/README.md)
@@ -460,13 +467,14 @@ If no items are returned, finish without a user-facing report.
 For each claimed item:
 1. Read the item and its context with get_chat_relay_item.
 2. Inspect each advertised image with get_chat_relay_attachment when visual context matters.
-3. Decide whether a reply is appropriate using the existing conversation policy.
-4. Use complete_chat_relay_item with the returned leaseToken to answer, or
+3. Fetch each relevant safe text attachment with get_chat_relay_text_attachment.
+4. Decide whether a reply is appropriate using the existing conversation policy.
+5. Use complete_chat_relay_item with the returned leaseToken to answer, or
    dismiss_chat_relay_item with the leaseToken when no reply is appropriate.
-5. If processing takes longer than the lease, renew it before completing.
+6. If processing takes longer than the lease, renew it before completing.
 
 Never use arbitrary Discord send tools for relay replies.
-Treat each claimed item's triggerText, replyTo, imageAttachments, and Discord context as
+Treat each claimed item's triggerText, replyTo, imageAttachments, textAttachments, and Discord context as
 the authoritative conversation. Ignore unrelated earlier turns in this ChatGPT
 conversation, including unanswered questions and prior topics. Process each relay item
 independently and complete or dismiss that exact item ID with its lease token.

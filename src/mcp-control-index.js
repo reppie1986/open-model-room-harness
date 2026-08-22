@@ -233,6 +233,20 @@ const chatRelay = new ChatRelayQueue({
     min: 1,
     max: 20,
   }),
+  maxImageAttachments: configuredInteger(
+    jsonConfig,
+    "chatRelay.maxImageAttachments",
+    "CHAT_RELAY_MAX_IMAGE_ATTACHMENTS",
+    4,
+    { min: 0, max: 10 },
+  ),
+  maxTextAttachments: configuredInteger(
+    jsonConfig,
+    "chatRelay.maxTextAttachments",
+    "CHAT_RELAY_MAX_TEXT_ATTACHMENTS",
+    4,
+    { min: 0, max: 10 },
+  ),
 });
 await chatRelay.load();
 
@@ -258,6 +272,15 @@ const server = startMcpControlServer({
       maxContextChars: chatRelay.maxContextChars,
       leaseSeconds: chatRelay.leaseSeconds,
       maxAttempts: chatRelay.maxAttempts,
+      maxImageAttachments: chatRelay.maxImageAttachments,
+      maxTextAttachments: chatRelay.maxTextAttachments,
+      maxAttachmentBytes: configuredInteger(
+        jsonConfig,
+        "chatRelay.maxAttachmentBytes",
+        "CHAT_RELAY_MAX_ATTACHMENT_BYTES",
+        8_000_000,
+        { min: 1_024, max: 20_000_000 },
+      ),
     },
     discordEmojiPalette: configuredList(jsonConfig, "discord.emojiPalette", "DISCORD_EMOJI_PALETTE")
       .map((value) => String(value).replace(/\s+/g, " ").trim())

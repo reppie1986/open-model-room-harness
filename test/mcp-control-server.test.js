@@ -705,7 +705,7 @@ test("MCP control server exposes tool discovery metadata", async () => {
         includeArguments: true,
       })).result.content[0].text,
     );
-    assert.equal(discovered.total, 8);
+    assert.equal(discovered.total, 9);
     assert.ok(discovered.categories.includes("discovery"));
     assert.deepEqual(
       discovered.tools.map((tool) => tool.name),
@@ -714,6 +714,7 @@ test("MCP control server exposes tool discovery metadata", async () => {
         "claim_chat_relay_items",
         "get_chat_relay_item",
         "get_chat_relay_attachment",
+        "get_chat_relay_text_attachment",
         "submit_chat_relay_reply",
         "renew_chat_relay_lease",
         "complete_chat_relay_item",
@@ -984,6 +985,44 @@ test("MCP control server returns relay attachments as image content", async () =
     assert.equal(metadata.size, 4);
 
     const missing = (await callTool(port, "get_chat_relay_attachment", { id: "relay-1", index: 1 })).result;
+    assert.equal(missing.isError, true);
+  } finally {
+    await server.close();
+  }
+});
+
+test("MCP control server returns relay text attachments as text content", async () => {
+  const chatRelay = {
+    getTextAttachment: (id, index) => id === "relay-1" && index === 0
+      ? {
+          source: "attachment",
+          filename: "recipe_for_a_pattern.md",
+          contentType: "text/markdown",
+          size: 12,
+          url: "https://cdn.discordapp.com/attachments/channel/message/recipe_for_a_pattern.md",
+        }
+      : null,
+  };
+  const server = createTestServer({
+    chatRelay,
+    config: { chatRelay: { maxAttachmentBytes: 1024 } },
+    fetchImplementation: async () => new Response(Buffer.from("# Soul Core\n"), {
+      headers: { "content-type": "text/markdown", "content-length": "12" },
+    }),
+  });
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const { port } = server.address();
+    const result = (await callTool(port, "get_chat_relay_text_attachment", { id: "relay-1", index: 0 })).result;
+    assert.deepEqual(result.content[0], {
+      type: "text",
+      text: "# Soul Core\n",
+    });
+    const metadata = JSON.parse(result.content[1].text);
+    assert.equal(metadata.filename, "recipe_for_a_pattern.md");
+    assert.equal(metadata.size, 12);
+
+    const missing = (await callTool(port, "get_chat_relay_text_attachment", { id: "relay-1", index: 1 })).result;
     assert.equal(missing.isError, true);
   } finally {
     await server.close();

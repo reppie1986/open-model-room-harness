@@ -6,7 +6,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { fetchRelayImageAttachment } from "./chat-relay-attachments.js";
+import { fetchRelayImageAttachment, fetchRelayTextAttachment } from "./chat-relay-attachments.js";
 import {
   clearDiscordScope,
   listDiscordScopes,
@@ -462,6 +462,16 @@ const TOOL_CATALOG = Object.freeze([
     },
   },
   {
+    name: "get_chat_relay_text_attachment",
+    category: "chat-relay",
+    safety: "read-only",
+    description: "Fetch one safe UTF-8 text file attached to a pending or leased Discord relay item.",
+    arguments: {
+      id: "Relay item ID.",
+      index: "Zero-based text attachment index from the relay item.",
+    },
+  },
+  {
     name: "submit_chat_relay_reply",
     category: "chat-relay",
     safety: "runtime-write",
@@ -662,6 +672,7 @@ function createMcpServer({
             "claim_chat_relay_items",
             "get_chat_relay_item",
             "get_chat_relay_attachment",
+            "get_chat_relay_text_attachment",
             "complete_chat_relay_item",
           ],
         },
@@ -1298,6 +1309,50 @@ function createMcpServer({
         content: [{
           type: "text",
           text: error instanceof Error ? error.message : "Relay image attachment could not be fetched.",
+        }],
+        isError: true,
+      };
+    }
+  });
+
+  server.tool("get_chat_relay_text_attachment", "Fetch one safe UTF-8 text file attached to a pending or leased Discord relay item.", {
+    id: z.string(),
+    index: z.number().int().min(0).max(9),
+  }, async ({ id, index }) => {
+    const reference = chatRelay?.getTextAttachment?.(id, index);
+    if (!reference) {
+      return {
+        content: [{ type: "text", text: "Relay text attachment was not found or is no longer active." }],
+        isError: true,
+      };
+    }
+    try {
+      const attachment = await fetchRelayTextAttachment(reference, {
+        fetchImplementation,
+        maxBytes: config.chatRelay?.maxAttachmentBytes,
+      });
+      return {
+        content: [
+          { type: "text", text: attachment.text },
+          {
+            type: "text",
+            text: JSON.stringify({
+              relayItemId: id,
+              index,
+              source: reference.source,
+              filename: reference.filename,
+              mimeType: attachment.mimeType,
+              size: attachment.size,
+            }),
+          },
+        ],
+      };
+    } catch (error) {
+      logger.error("MCP chat relay text attachment fetch failed", error);
+      return {
+        content: [{
+          type: "text",
+          text: error instanceof Error ? error.message : "Relay text attachment could not be fetched.",
         }],
         isError: true,
       };
